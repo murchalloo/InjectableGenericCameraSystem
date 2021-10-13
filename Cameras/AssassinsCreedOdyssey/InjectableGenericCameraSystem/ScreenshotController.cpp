@@ -33,8 +33,24 @@
 #include "OverlayControl.h"
 #include <direct.h>
 #include "CameraManipulator.h"
+#include "Globals.h"
+#define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#define _CRT_SECURE_NO_WARNINGS
 #include "stb_image_write.h"
+
+#define ChannelBlend_Add(A, B)        ((float)(min(255, (A + B))))
+#define BYTE_BOUND(value) value < 0 ? 0 : (value > 255 ? 255 : value)
+
+double fastPow(double a, double b) {
+	union {
+		double d;
+		int x[2];
+	} u = { a };
+	u.x[1] = (int)(b * (u.x[1] - 1072632447) + 1072632447);
+	u.x[0] = 0;
+	return u.d;
+}
 
 using namespace std;
 
@@ -70,6 +86,14 @@ namespace IGCS
 			return false;
 		}
 		return _state == ScreenshotControllerState::Grabbing;
+	}
+
+	bool ScreenshotController::isBokehShot()
+	{
+		if (_typeOfShot == ScreenshotType::BokehShot) {
+			return true;
+		}
+		return false;
 	}
 
 
@@ -122,7 +146,7 @@ namespace IGCS
 		// on either side is preferable.
 
 		// calculate the angle to step
-		_anglePerStep = currentFoV * ((100.0f-overlapPercentagePerPanoShot) / 100.0f);
+		_anglePerStep = currentFoV * ((100.0f - overlapPercentagePerPanoShot) / 100.0f);
 		// calculate the # of shots to take
 		_amountOfShotsToTake = ((_totalFoV / _anglePerStep) + 1);
 
@@ -164,6 +188,96 @@ namespace IGCS
 		// done
 	}
 
+	void ScreenshotController::startBokehShot(bool lastShotTaken)
+	{
+		if (!lastShotTaken) {
+			//OverlayConsole::instance().logDebug("startBokehShot start.");
+			reset();
+			_typeOfShot = ScreenshotType::BokehShot;
+			_state = ScreenshotControllerState::Grabbing;
+			// we'll wait now till all the shots are taken. 
+			waitForShots();
+		}
+		else {
+			OverlayControl::addNotification("Bokeh screenshot taken. Writing to disk...");
+			saveBokehGrabbedShots();
+			OverlayControl::addNotification("Bokeh screenshot done.");
+		}
+
+		// done
+	}
+
+	void ScreenshotController::storeBokehGrabbedShot(std::vector<uint8_t> grabbedShot)
+	{
+		if (grabbedShot.size() <= 0)
+		{
+			// failed
+			return;
+		}
+		if (!Globals::instance().settings().onlyLastShot) {
+			float blendingRate = 1.0f / (float)(Globals::instance().shotsToTake());
+			if (_floatRangeFrame.size() <= 0) {
+				_finalFrame = grabbedShot;
+				size_t size = grabbedShot.size();
+				for (int i = 0; i < size; i += 1) {
+					_floatRangeFrame.push_back((float)(fastPow(grabbedShot.data()[i] / 255.f * blendingRate, (Globals::instance().settings().gammaCorrection)))); //first sample converted to 0 to 1 float with gamma correction
+				}
+			}
+			else {
+				size_t size = grabbedShot.size();
+
+				// camera rotation method (close distance broken)
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				for (int i = 0; i < size; i += 4) {
+					_floatRangeFrame.data()[i] = ChannelBlend_Add(_floatRangeFrame.data()[i], ((float)(fastPow(grabbedShot.data()[i] / 255.f, (Globals::instance().settings().gammaCorrection)) * blendingRate)));
+					_floatRangeFrame.data()[i + 1] = ChannelBlend_Add(_floatRangeFrame.data()[i + 1], ((float)(fastPow(grabbedShot.data()[i + 1] / 255.f, (Globals::instance().settings().gammaCorrection)) * blendingRate)));
+					_floatRangeFrame.data()[i + 2] = ChannelBlend_Add(_floatRangeFrame.data()[i + 2], ((float)(fastPow(grabbedShot.data()[i + 2] / 255.f, (Globals::instance().settings().gammaCorrection)) * blendingRate)));
+					_floatRangeFrame.data()[i + 3] = 1.f;
+				}
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				//image offset method (close distance broken too)
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				
+				/*int sy = 0;
+				int sx = 0;
+				for (sy = 0; sy < _framebufferHeight; ++sy) {
+					if (sy + ((int)floor(Globals::instance().offsetValuesY())) < 0) { continue; }
+					if (sy + ((int)floor(Globals::instance().offsetValuesY())) >= _framebufferHeight) { break; }
+					for (sx = 0; sx < _framebufferWidth; ++sx) {
+						if (sx + ((int)floor(Globals::instance().offsetValuesX())) < 0) { continue; }
+						if (sx + ((int)floor(Globals::instance().offsetValuesX())) >= _framebufferWidth) { break; }
+						int sourcePx = (sx + sy * _framebufferWidth) * 4;
+						int dstPx = (sx + (int)floor(Globals::instance().offsetValuesX()) + (sy + (int)floor(Globals::instance().offsetValuesY())) * _framebufferWidth) * 4;
+						float dstPxF = (sx + Globals::instance().offsetValuesX() + (sy + Globals::instance().offsetValuesY()) * _framebufferWidth) * 4;
+						_floatRangeFrame.data()[sourcePx] = _floatRangeFrame.data()[sourcePx] + ((float)(fastPow(grabbedShot.data()[dstPx] / 255.f, (Globals::instance().settings().gammaCorrection)) * blendingRate));
+						_floatRangeFrame.data()[sourcePx + 1] = _floatRangeFrame.data()[sourcePx + 1] + ((float)(fastPow(grabbedShot.data()[dstPx + 1] / 255.f, (Globals::instance().settings().gammaCorrection)) * blendingRate));
+						_floatRangeFrame.data()[sourcePx + 2] = _floatRangeFrame.data()[sourcePx + 2] + ((float)(fastPow(grabbedShot.data()[dstPx + 2] / 255.f, (Globals::instance().settings().gammaCorrection)) * blendingRate));
+						_floatRangeFrame.data()[sourcePx + 3] = 1;//_floatRangeFrame.data()[sourcePx + 3] + ((float)((grabbedShot.data()[dstPx + 3] / 255.f * blendingRate)));
+					}
+				}*/
+			}
+		}
+		else { //Only Last Shot capture
+			if (_floatRangeFrame.size() <= 0) {
+				_finalFrame = grabbedShot;
+				size_t size = grabbedShot.size();
+				for (int i = 0; i < size; i += 1) {
+					_floatRangeFrame.push_back((float)(grabbedShot.data()[i] / 255.f));
+				}
+			}
+		}
+
+		// we're done. Move to the next state, which is saving shots.
+		unique_lock<mutex> lock(_waitCompletionMutex);
+		_state = ScreenshotControllerState::SavingShots;
+		// tell the waiting thread to wake up so the system can proceed as normal.
+		_waitCompletionHandle.notify_all();
+
+	}
+
 
 	void ScreenshotController::storeGrabbedShot(std::vector<uint8_t> grabbedShot)
 	{
@@ -187,6 +301,42 @@ namespace IGCS
 			modifyCamera();
 			_convolutionFrameCounter = _numberOfFramesToWaitBetweenSteps;
 		}
+	}
+
+
+	void ScreenshotController::saveBokehGrabbedShots()
+	{
+		/*if (_grabbedFrames.size() <= 0)
+		{
+			return;
+		}*/
+		if (!_isTestRun)
+		{
+			if (Globals::instance().settings().onlyLastShot) {
+				for (int i = 0; i < _floatRangeFrame.size(); i += 4) {
+					_finalFrame.data()[i] = (unsigned char/*uint8_t*/)BYTE_BOUND(_floatRangeFrame.data()[i] * 255.f);
+					_finalFrame.data()[i + 1] = (unsigned char/*uint8_t*/)BYTE_BOUND(_floatRangeFrame.data()[i + 1] * 255.f);
+					_finalFrame.data()[i + 2] = (unsigned char/*uint8_t*/)BYTE_BOUND(_floatRangeFrame.data()[i + 2] * 255.f);
+					_finalFrame.data()[i + 3] = (unsigned char/*uint8_t*/)BYTE_BOUND(255.f);
+				}
+			} else {
+			float gamma = 1.f / Globals::instance().settings().gammaCorrection;
+			for (int i = 0; i < _floatRangeFrame.size(); i += 4) {
+				_finalFrame.data()[i] = (unsigned char/*uint8_t*/)BYTE_BOUND(fastPow(_floatRangeFrame.data()[i], (gamma)) * 255.f);
+				_finalFrame.data()[i + 1] = (unsigned char/*uint8_t*/)BYTE_BOUND(fastPow(_floatRangeFrame.data()[i + 1], (gamma)) * 255.f);
+				_finalFrame.data()[i + 2] = (unsigned char/*uint8_t*/)BYTE_BOUND(fastPow(_floatRangeFrame.data()[i + 2], (gamma)) * 255.f);
+				_finalFrame.data()[i + 3] = (unsigned char/*uint8_t*/)BYTE_BOUND(255.f);
+			}
+			}
+			string destinationFolder = createScreenshotFolder();
+			int frameNumber = 0;
+			saveShotToFile(destinationFolder, _finalFrame, frameNumber);
+		}
+		// done
+		_floatRangeFrame.clear();
+		_finalFrame.clear();
+		_grabbedFrames.clear();
+		_state = ScreenshotControllerState::Off;
 	}
 
 
@@ -216,19 +366,32 @@ namespace IGCS
 	{
 		bool saveSuccessful = false;
 		string filename = "";
-		switch (_filetype)
+		switch (Globals::instance().settings().fileType) //_filetype (choose between filetypes)
 		{
-		case ScreenshotFiletype::Bmp:
+			/*case ScreenshotFiletype::Bmp:
+				filename = Utils::formatString("%s\\%d.bmp", destinationFolder.c_str(), frameNumber);
+				saveSuccessful = stbi_write_bmp(filename.c_str(), _framebufferWidth, _framebufferHeight, 4, data.data()) != 0;
+				break;
+			case ScreenshotFiletype::Jpeg:
+				filename = Utils::formatString("%s\\%d.jpg", destinationFolder.c_str(), frameNumber);
+				saveSuccessful = stbi_write_jpg(filename.c_str(), _framebufferWidth, _framebufferHeight, 4, data.data(), IGCS_JPG_SCREENSHOT_QUALITY) != 0;
+				break;
+			case ScreenshotFiletype::Png:
+				filename = Utils::formatString("%s\\%d.png", destinationFolder.c_str(), frameNumber);
+				saveSuccessful = stbi_write_png(filename.c_str(), _framebufferWidth, _framebufferHeight, 4, data.data(), 4 * _framebufferWidth) != 0;
+				break;*/
+
+		case (int)ScreenshotFiletype::Bmp:
 			filename = Utils::formatString("%s\\%d.bmp", destinationFolder.c_str(), frameNumber);
 			saveSuccessful = stbi_write_bmp(filename.c_str(), _framebufferWidth, _framebufferHeight, 4, data.data()) != 0;
 			break;
-		case ScreenshotFiletype::Jpeg:
+		case (int)ScreenshotFiletype::Jpeg:
 			filename = Utils::formatString("%s\\%d.jpg", destinationFolder.c_str(), frameNumber);
 			saveSuccessful = stbi_write_jpg(filename.c_str(), _framebufferWidth, _framebufferHeight, 4, data.data(), IGCS_JPG_SCREENSHOT_QUALITY) != 0;
 			break;
-		case ScreenshotFiletype::Png:
+		case (int)ScreenshotFiletype::Png:
 			filename = Utils::formatString("%s\\%d.png", destinationFolder.c_str(), frameNumber);
-			saveSuccessful = stbi_write_png(filename.c_str(), _framebufferWidth, _framebufferHeight, 8, data.data(), 4 * _framebufferWidth) != 0;
+			saveSuccessful = stbi_write_png(filename.c_str(), _framebufferWidth, _framebufferHeight, 4, data.data(), 4 * _framebufferWidth) != 0;
 			break;
 		}
 		if (saveSuccessful)
@@ -278,6 +441,9 @@ namespace IGCS
 			moveCameraForLightfield(1, false);
 			break;
 		case ScreenshotType::SingleShot:
+			// nothing
+			break;
+		case ScreenshotType::BokehShot:
 			// nothing
 			break;
 		}
@@ -331,5 +497,6 @@ namespace IGCS
 		_isTestRun = false;
 
 		_grabbedFrames.clear();
+		_floatRangeFrame.clear();
 	}
 }

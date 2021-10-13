@@ -69,6 +69,16 @@ namespace IGCS
 		ActionData& getKeyCollector() { return _keyCollectorData; }
 		ScreenshotController& getScreenshotController() { return _screenshotController; }
 		void reinitializeScreenshotController();
+		bool checkBokehButton() const { return _bokeh; }
+		void checkBokehButton(bool value) { _bokeh = value; }
+		float shotsToTake() const { return _bokehShotsToTake; }
+		void shotsToTake(float value) { _bokehShotsToTake = value; }
+		float shotCounter() const { return _bokehShotCounter; }
+		void shotCounter(float value) { _bokehShotCounter = value; }
+		double offsetValuesX() const { return _xCameraReversed; }
+		void offsetValuesX(double value) { _xCameraReversed = value; }
+		double offsetValuesY() const { return _yCameraReversed; }
+		void offsetValuesY(double value) { _yCameraReversed = value; }
 
 	private:
 		void initializeKeyBindings();
@@ -82,5 +92,11 @@ namespace IGCS
 		map<ActionType, ActionData*> _keyBindingPerActionType;
 		ActionData _keyCollectorData = ActionData("KeyCollector", "", 0, false, false, false);
 		ScreenshotController _screenshotController;
+
+		bool _bokeh = false;
+		float _bokehShotsToTake = 0.0f;
+		float _bokehShotCounter = 0.0f;
+		double _xCameraReversed = 0.0f;
+		double _yCameraReversed = 0.0f;
 	};
 }

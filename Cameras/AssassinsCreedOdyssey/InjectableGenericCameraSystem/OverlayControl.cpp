@@ -45,6 +45,7 @@ namespace IGCS::OverlayControl
 	void renderHelp();
 	void renderSettings();
 	void renderMainWindow();
+	void renderBokehWindow();
 	void renderKeyBindings();
 	void renderSplash();
 	void updateNotificationStore();
@@ -105,7 +106,7 @@ namespace IGCS::OverlayControl
 		{
 			auto itemSpacing = ImVec2(ImGui::GetStyle().ItemSpacing.x*2.0f, ImGui::GetStyle().ItemSpacing.y);
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, itemSpacing);
-			const char *const menu_items[] = { "Settings", "Key-bindings", "Console", "Help", "About" };
+			const char *const menu_items[] = { "Settings", "Bokeh", "Key-bindings", "Console", "Help", "About" };
 			for (int i = 0; i < 5; i++)
 			{
 				if (ImGui::Selectable(menu_items[i], _menuItemSelected == i, 0, ImVec2(ImGui::CalcTextSize(menu_items[i]).x, 0)))
@@ -125,16 +126,19 @@ namespace IGCS::OverlayControl
 		case 0: // settings
 			renderSettings();
 			break;
-		case 1: // key bindings
+		case 1: // bokeh
+			renderBokehWindow();
+			break;
+		case 2: // key bindings
 			renderKeyBindings();
 			break;
-		case 2: // console
+		case 3: // console
 			IGCS::OverlayConsole::instance().draw();
 			break;
-		case 3:	// help
+		case 4:	// help
 			renderHelp();
 			break;
-		case 4:	// about
+		case 5:	// about
 			renderAbout();
 			break;
 		}
@@ -190,6 +194,172 @@ Special thanks to:
 * The users of my camera's, you all are a great inspiration to make the best camera tools possible!)");
 		}
 		ImGui::PopTextWrapPos();
+	}
+
+	void renderBokehWindow()
+	{
+		GameSpecific::CameraManipulator::getSettingsFromGameState();
+		Settings& currentSettings = Globals::instance().settings();
+		bool settingsChanged = false;
+		if (ImGui::Button("Start Rendering"))
+		{
+			if (g_cameraEnabled) {
+				if (!Globals::instance().checkBokehButton()) {
+					_showMainWindow = !_showMainWindow;
+					if (!Globals::instance().settings().onlyLastShot) {
+						Sleep(ceil(1000.0f / ImGui::GetIO().Framerate) * 5); // wait a few frames for overlay to close
+					}
+					GameSpecific::CameraManipulator::cacheOriginalValuesBeforeMultiShot();
+					Globals::instance().checkBokehButton(true);
+					/*OverlayControl::addNotification("Bokeh Rendering started");*/
+					
+				}
+				else {
+					Globals::instance().checkBokehButton(false);
+					/*OverlayControl::addNotification("Bokeh Rendering stopped");*/
+					GameSpecific::CameraManipulator::restoreOriginalValuesAfterMultiShot();
+				}
+			}
+			
+			
+		}
+		ImGui::PushTextWrapPos();
+		ImGui::Text("Frametime: %f", (1000.0f / ImGui::GetIO().Framerate));
+		///////////////////////////////////////////////////////////////////
+		//static ImVector<ImVec2> points;
+		static ImVector<ImVec2> points;
+		static ImVector<float> rotation;
+		static ImVector<float> debug;
+		static ImVec2 scrolling(0.0f, 0.0f);
+
+		ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();      // ImDrawList API uses screen coordinates!
+		ImVec2 canvas_sz = ImGui::GetContentRegionAvail();   // Resize canvas to what's available
+		canvas_sz.y = canvas_sz.x;
+		if (canvas_sz.x < 50.0f) canvas_sz.x = 50.0f;
+		if (canvas_sz.y < 50.0f) canvas_sz.y = 50.0f;
+		if (canvas_sz.x > 300.0f) canvas_sz.x = 300.0f;
+		if (canvas_sz.y > 300.0f) canvas_sz.y = 300.0f;
+		ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
+
+		// Draw border and background color
+		ImGuiIO& io = ImGui::GetIO();
+		ImDrawList* draw_list = ImGui::GetWindowDrawList();
+		ImDrawList* bg_draw_list = ImGui::GetBackgroundDrawList();
+		draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(50, 50, 50, 255));
+		draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(255, 255, 255, 255));
+
+		// This will catch our interactions
+		ImGui::InvisibleButton("canvas", canvas_sz);
+		const bool is_hovered = ImGui::IsItemHovered(); // Hovered
+		const bool is_active = ImGui::IsItemActive();   // Held
+		const ImVec2 origin(canvas_p0.x + scrolling.x, canvas_p0.y + scrolling.y); // Lock scrolled origin
+		const ImVec2 mouse_pos_in_canvas(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
+
+		float radius = ((min(canvas_sz.x, canvas_sz.y) / 2) - (canvas_sz.x / 2 * 0.05)) * 0.001f;
+		//static float previewSize = 1.5f;
+		//static float offSet = 0.01f;
+		static float actualOffSet = 0.0f;
+		//static bool offsetType = false;
+		static float roundness = 1.0f;
+		static float amount;
+		ImVec2 dotCoords;
+		//static float shapeSize = 1.0f;
+		static double PI = 3.14159265358979323846264338327950288419716939937510;
+		//static int numberOfRings = 12;
+		static int pointsFirstRing = 6;
+		static int pointsOnRing = 0;
+		static float currentRingRadiusCoords = 0;
+		static float ringRadiusDeltaCoords = 0;
+		static float anamorphX = 1.0f;
+		static float anamorphY = 1.0f;
+		static float timeCounter = 0;
+		//static float anamorphism = 0.0f;
+
+		float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+
+		settingsChanged |= ImGui::SliderFloat("Focusing correction", &currentSettings.focusingCorrection, 1.0f, 5.0f);
+		settingsChanged |= ImGui::SliderFloat("Focusing distance /m.", &currentSettings.focusingDistance, 0.1f, 1000.0f);
+		settingsChanged |= ImGui::SliderInt("Shape size", &currentSettings.shapeSize, 1, 100);
+		settingsChanged |= ImGui::SliderFloat("Gamma correction", &currentSettings.gammaCorrection, 1.0f, 3.0f);
+		settingsChanged |= ImGui::SliderFloat("Points size", &currentSettings.previewSize, 1.0f, 3.0f);
+		settingsChanged |= ImGui::SliderInt("Number of rings", &currentSettings.numberOfRings, 1, 30);
+		settingsChanged |= ImGui::SliderFloat("Camera Z-pos correction", &currentSettings.zPosCorrection, 0.0f, 1.0f);
+		settingsChanged |= ImGui::SliderFloat("Anamorphic scale", &currentSettings.anamorphism, -1.0f, 1.0f, "%.3f");
+		settingsChanged |= ImGui::Checkbox("Change offset type", &currentSettings.offSetType);
+		settingsChanged |= ImGui::SliderFloat("Offset size", &currentSettings.offSet, 0.0f, 10.0f, "%.3f");
+		settingsChanged |= ImGui::Checkbox("Capture only last frame", &currentSettings.onlyLastShot);
+		//settingsChanged |= ImGui::Checkbox("Test", &currentSettings.testMove);
+		//settingsChanged |= ImGui::Checkbox("unchecked Up/Right checked", &currentSettings.upRight);
+		//ImGui::Text("Current FOV: %.3f", (float)GameSpecific::CameraManipulator::getCurrentFoV());
+
+		if (currentSettings.anamorphism >= 0.0f) {
+			anamorphX = 1 - abs(currentSettings.anamorphism);
+		}
+		else {
+			anamorphY = 1 - abs(currentSettings.anamorphism);
+		}
+		ringRadiusDeltaCoords = (radius * (float)(currentSettings.shapeSize)) / currentSettings.numberOfRings;
+		currentRingRadiusCoords = ringRadiusDeltaCoords;
+		pointsOnRing = pointsFirstRing;
+		points.push_back(ImVec2(canvas_sz.x / 2 - 0, canvas_sz.y / 2 - 0));
+		for (float ringIndex = 0.f; ringIndex < currentSettings.numberOfRings; ringIndex++)
+		{
+			float x;
+			float y;
+			float xOff;
+			float yOff;
+			float anglePerPoint = (float)(2 * PI) / pointsOnRing;
+			float angle = anglePerPoint;
+			if (currentSettings.offSetType) {
+				actualOffSet = currentSettings.offSet * ringIndex;
+			}
+			else {
+				actualOffSet = currentSettings.offSet;
+			}
+			for (float pointNumber = 0.f; pointNumber < pointsOnRing; pointNumber++)
+			{
+				x = (float)(currentRingRadiusCoords * anamorphX * sin(angle + actualOffSet));
+				y = (float)(currentRingRadiusCoords * anamorphY * cos(angle + actualOffSet));
+				dotCoords = ImVec2(x, y);
+				points.push_back(ImVec2(origin.x + (canvas_sz.x / 2 - dotCoords.x), origin.y + (canvas_sz.y / 2 - dotCoords.y)));
+
+				angle += anglePerPoint;
+				timeCounter++;
+			}
+			pointsOnRing += pointsFirstRing;
+			currentRingRadiusCoords += ringRadiusDeltaCoords;
+		}
+		debug.push_back(timeCounter);
+		/*Globals::instance().shotsToTake(timeCounter);*/
+		debug.push_back(floor(((timeCounter* ceil(1000.0f / ImGui::GetIO().Framerate)) / 1000) / 60));
+		debug.push_back(((((timeCounter* ceil(1000.0f / ImGui::GetIO().Framerate)) / 1000) / 60) - floor(((timeCounter * ceil(1000.0f / ImGui::GetIO().Framerate)) / 1000) / 60)) * 60);
+
+		timeCounter = 0;
+
+		draw_list->PushClipRect(canvas_p0, canvas_p1, true);
+		for (int n = 0; n < points.Size; n += 1) {
+			bg_draw_list->AddCircleFilled(points[n], currentSettings.previewSize, IM_COL32(255, 255, 255, 255), 0);
+		}
+
+		{
+			ImGuiWindowFlags window_flags = ImGuiWindowFlags_HorizontalScrollbar;
+			ImGui::BeginChild("ChildL", ImVec2(ImGui::GetContentRegionAvail().x * 1.0f, 260), false, window_flags);
+			for (int i = 0; i < debug.size(); i += 3) {
+				ImGui::Text("shots to take: %.0f", debug[i]);
+				ImGui::Text("render time: %.0f minutes %.0f seconds to render with average frametime: %.2f", debug[i + 1], debug[i + 2], ceil(1000.0f / ImGui::GetIO().Framerate));
+			}
+			ImGui::EndChild();
+		}
+		draw_list->PopClipRect();
+		points.clear();
+		rotation.clear();
+		debug.clear();
+		///////////////////////////////////////////////////////////////////
+		if (settingsChanged)
+		{
+			Globals::instance().markSettingsDirty();
+		}
+		GameSpecific::CameraManipulator::applySettingsToGameState();
 	}
 
 
@@ -337,6 +507,7 @@ Special thanks to:
 					break;
 					// others: ignore.
 			}
+			screenshotSettingsChanged |= ImGui::Combo("Screenshot format", &currentSettings.fileType, "Bmp\0Jpeg\0Png\0\0");
 			if (screenshotSettingsChanged)
 			{
 				Globals::instance().reinitializeScreenshotController();

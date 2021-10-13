@@ -42,6 +42,7 @@
 #include "OverlayControl.h"
 #include "MinHook.h"
 #include <time.h>
+#include <cmath>
 #include <direct.h>
 #include "ScreenshotController.h"
 
@@ -76,7 +77,17 @@ namespace IGCS
 	{
 		while (Globals::instance().systemActive())
 		{
-			Sleep(FRAME_SLEEP);
+			if (Globals::instance().checkBokehButton()) {
+				if (!_firstFrame) {
+					Sleep(round(1000.0f / ImGui::GetIO().Framerate)); // ceil/floor/round
+				}
+				else {
+					_firstFrame = false;
+				}
+			}
+			else {
+				Sleep(FRAME_SLEEP);
+			}
 			updateFrame();
 		}
 	}
@@ -85,8 +96,24 @@ namespace IGCS
 	// updates the data and camera for a frame 
 	void System::updateFrame()
 	{
-		handleUserInput();
+		handleBokehRendering();
+		if (!Globals::instance().checkBokehButton())
+		{
+			handleUserInput();
+		}
+
 		CameraManipulator::updateCameraDataInGameData(_camera);
+		/*if (Globals::instance().checkBokehButton())
+		{
+			Sleep(round(1000.0f / ImGui::GetIO().Framerate)); // ceil/floor/round
+			_camera.resetMovement();
+
+			_camera.pitchBokeh(-_angleY); //Y
+			_camera.yawBokeh(-_angleX); //X
+
+			_camera.moveUpBokeh(-_x);
+			_camera.moveRightBokeh(-_y);
+		}*/
 	}
 
 
@@ -185,6 +212,12 @@ namespace IGCS
 			_applyHammerPrevention = true;
 			return;
 		}
+		if (Input::isActionActivated(ActionType::TakeBokehShot))
+		{
+			takeBokehScreenshot();
+			_applyHammerPrevention = true;
+			return;
+		}
 		if (Input::isActionActivated(ActionType::BlockInput))
 		{
 			toggleInputBlockState(!Globals::instance().inputBlocked());
@@ -209,12 +242,238 @@ namespace IGCS
 		handleKeyboardCameraMovement(multiplier);
 		handleMouseCameraMovement(multiplier);
 		handleGamePadMovement(multiplier);
+
+	}
+
+
+
+
+
+	void System::handleBokehRendering()
+	{
+		//////////////////////////////////////////////////////////////////////////////////////////////// //checking camera movement
+		if (Globals::instance().settings().testMove) {
+			if (Globals::instance().checkBokehButton())
+			{
+				if (Globals::instance().settings().upRight) {
+					_camera.moveRightBokeh(1.0f * _radius);
+				}
+				else {
+					_camera.moveUpBokeh(1.0f * _radius);
+				}
+				Globals::instance().offsetValuesX((1.0f * _radius) * (1.f - Globals::instance().settings().focusingDistance) / (_radius / Globals::instance().settings().focusingCorrection) / GameSpecific::CameraManipulator::getCurrentFoV());
+				Globals::instance().offsetValuesY((-1.0f * _radius) * (1.f - Globals::instance().settings().focusingDistance) / (_radius / Globals::instance().settings().focusingCorrection) / GameSpecific::CameraManipulator::getCurrentFoV());
+				OverlayConsole::instance().logLine(" 1 unit offset X: %f offset Y: %f", Globals::instance().offsetValuesX(), Globals::instance().offsetValuesY());
+				//
+				Globals::instance().checkBokehButton(false);
+			}
+			else {
+				return;
+			}
+		}
+		////////////////////////////////////////////////////////////////////////////////////////////////
+		else {
+			
+			if (_applyHammerPrevention)
+			{
+				_applyHammerPrevention = false;
+				// sleep main thread for 200ms so key repeat delay is simulated. 
+				Sleep(300);
+			}
+
+			if (Input::isActionActivated(ActionType::TakeBokehShot))
+			{
+				takeBokehScreenshot();
+				_applyHammerPrevention = true;
+				return;
+			}
+
+			if (!Globals::instance().checkBokehButton())
+			{
+				//disable rendering while processing
+				_ringIndex = 1.0f;
+				_pointNumber = 1.0f;
+				if (_bokehRendering) {
+					_camera.yawBokeh(-_angleX); //X
+					_camera.pitchBokeh(-_angleY); //Y
+					GameSpecific::CameraManipulator::restoreOriginalValuesAfterMultiShot();
+				}
+				_bokehRendering = false;
+				return;
+			}
+			else {
+
+				_camera.resetMovement();
+
+				////////////////////////////////////////////////////////////////////////////////////////////////
+
+				if (!_bokehRendering) //defaulting all necessary values
+				{
+					_bokehRendering = true;
+					_x = 0.0;
+					_y = 0.0;
+					_z = 0.0;
+					_ringIndex = 1.0f;
+					_pointNumber = 1.0f;
+					_pointsOnRing = _pointsFirstRing;
+
+					//exact final samples count for blending
+
+					////////////////////////////////////////////////////////////////////////////////////////////////
+
+					int samplesCounter = 0;
+					for (float ringIndex = 0; ringIndex < Globals::instance().settings().numberOfRings; ringIndex++)
+					{
+						for (float pointNumber = 0; pointNumber < _pointsOnRing; pointNumber++)
+						{
+							samplesCounter++;
+						}
+						_pointsOnRing += _pointsFirstRing;
+					}
+					Globals::instance().shotsToTake(samplesCounter);
+
+					////////////////////////////////////////////////////////////////////////////////////////////////
+
+					if (!Globals::instance().settings().onlyLastShot) {
+						Globals::instance().getScreenshotController().startBokehShot(false); //first sample capturing
+					}
+
+					//anamorphic value
+
+					////////////////////////////////////////////////////////////////////////////////////////////////
+
+					if (Globals::instance().settings().anamorphism > 0.0f) {
+						_anamorphX = 1.0f - abs(Globals::instance().settings().anamorphism);
+						_anamorphY = 1.0f;
+					}
+					else if (Globals::instance().settings().anamorphism < 0.0f) {
+						_anamorphY = 1.0f - abs(Globals::instance().settings().anamorphism);
+						_anamorphX = 1.0f;
+					}
+					else {
+						_anamorphX = 1.0f;
+						_anamorphY = 1.0f;
+					}
+					////////////////////////////////////////////////////////////////////////////////////////////////
+
+					_ringRadiusDeltaCoords = (_radius * (double)(Globals::instance().settings().shapeSize)) / (double)Globals::instance().settings().numberOfRings;
+					_currentRingRadiusCoords = _ringRadiusDeltaCoords;
+					_pointsOnRing = _pointsFirstRing;
+					_anglePerPoint = (double)DirectX::XM_2PI / (double)_pointsOnRing;
+					_angle = _anglePerPoint;
+					_shotCounter = 0.0f;
+					_angleX = 0.0f;
+					_angleY = 0.0f;
+					_focus = (double)Globals::instance().settings().focusingDistance;
+
+					if (Globals::instance().settings().offSetType) {
+						_actualOffSet = Globals::instance().settings().offSet * _ringIndex;
+					}
+					else {
+						_actualOffSet = Globals::instance().settings().offSet;
+					}
+				}
+
+				//reseting camera position and rotation to 0 before move to next point
+
+				////////////////////////////////////////////////////////////////////////////////////////////////
+
+				/*_camera.moveForwardBokeh(-_z);*/ //z astigmatism immitation test
+
+				if (_angleY != 0.0) _camera.pitchBokeh(-_angleY); //Y
+				if (_angleX != 0.0) _camera.yawBokeh(-_angleX); //X
+
+				if (_x != 0.0) _camera.moveUpBokeh(-_x);
+				if (_y != 0.0) _camera.moveRightBokeh(-_y);
+
+				////////////////////////////////////////////////////////////////////////////////////////////////
+
+				//calculating new camera position
+
+				////////////////////////////////////////////////////////////////////////////////////////////////
+
+				_x = (double)(_currentRingRadiusCoords * _anamorphX * sin(_angle + _actualOffSet));
+				_y = (double)(_currentRingRadiusCoords * _anamorphY * cos(_angle + _actualOffSet));
+
+				if (_y != 0.0) _camera.moveRightBokeh(_y);
+				if (_x != 0.0) _camera.moveUpBokeh(_x);
+
+				////////////////////////////////////////////////////////////////////////////////////////////////
+
+				// camera rotation method (close distance broken)
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				_angleX = (atan2(_focus, 0.0) - atan2(_focus, -_y)); 
+				_angleY = (atan2(_focus, 0.0) - atan2(_focus, _x));
+
+				if (_angleX != 0.0) _camera.yawBokeh(_angleX); //X
+				if (_angleY != 0.0) _camera.pitchBokeh(_angleY); //Y
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				// image offset method (close distance broken too)
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				//Globals::instance().offsetValuesX(-_y * (1.f - Globals::instance().settings().focusingDistance) / (_radius / Globals::instance().settings().focusingCorrection) / GameSpecific::CameraManipulator::getCurrentFoV());
+				//Globals::instance().offsetValuesY(_x * (1.f - Globals::instance().settings().focusingDistance) / (_radius / Globals::instance().settings().focusingCorrection) / GameSpecific::CameraManipulator::getCurrentFoV());
+				//Globals::instance().offsetValuesX(-_y * (Globals::instance().settings().focusingDistance) / GameSpecific::CameraManipulator::getCurrentFoV());
+				//Globals::instance().offsetValuesY(_x * (Globals::instance().settings().focusingDistance) / GameSpecific::CameraManipulator::getCurrentFoV());
+				//Globals::instance().offsetValuesX(-_y * (double)(Globals::instance().settings().focusingDistance) * 9.0);
+				//Globals::instance().offsetValuesY(_x * (double)(Globals::instance().settings().focusingDistance) * 9.0);
+
+				//_shotCounter++;
+				//Globals::instance().shotCounter(_shotCounter);
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				//z astigmatism immitation test (broken cuz of broken rotation)
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				//_z = (double)(Globals::instance().settings().zPosCorrection * (((double)(max(abs(_x), abs(_y)))/(_focus*100.0f))*_ringIndex)); 
+				//_camera.moveForwardBokeh(_z);
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				if (!Globals::instance().settings().onlyLastShot) {
+					Globals::instance().getScreenshotController().startBokehShot(false);
+				}
+
+				///////////////////////////////////
+
+				_angle += _anglePerPoint;
+				_pointNumber++;
+
+				if (_pointNumber > _pointsOnRing)
+				{
+					_pointNumber = 1.0f;
+					_ringIndex++;
+					_pointsOnRing += _pointsFirstRing;
+					_anglePerPoint = (double)(DirectX::XM_2PI) / _pointsOnRing;
+					_currentRingRadiusCoords += _ringRadiusDeltaCoords;
+				}
+
+				if (_ringIndex > Globals::instance().settings().numberOfRings)
+				{
+					if (Globals::instance().settings().onlyLastShot) {
+						Globals::instance().getScreenshotController().startBokehShot(false);
+					}
+					Globals::instance().getScreenshotController().startBokehShot(true);
+					Globals::instance().checkBokehButton(false);
+					//OverlayConsole::instance().logLine("shots overlay: %f actual shots: %f", Globals::instance().shotsToTake(), _shotCounter);
+					GameSpecific::CameraManipulator::restoreOriginalValuesAfterMultiShot();
+					return;
+				}
+			}
+		}
 	}
 
 
 	void System::handleGamePadMovement(float multiplierBase)
 	{
-		if(!Globals::instance().controllerControlsCamera())
+		if (!Globals::instance().controllerControlsCamera())
 		{
 			return;
 		}
@@ -224,8 +483,8 @@ namespace IGCS
 		if (gamePad.isConnected())
 		{
 			Settings& settings = Globals::instance().settings();
-			float  multiplier = gamePad.isButtonPressed(IGCS_BUTTON_FASTER) ? settings.fastMovementMultiplier 
-																			: gamePad.isButtonPressed(IGCS_BUTTON_SLOWER) ? settings.slowMovementMultiplier : multiplierBase;
+			float  multiplier = gamePad.isButtonPressed(IGCS_BUTTON_FASTER) ? settings.fastMovementMultiplier
+				: gamePad.isButtonPressed(IGCS_BUTTON_SLOWER) ? settings.slowMovementMultiplier : multiplierBase;
 			vec2 rightStickPosition = gamePad.getRStickPosition();
 			_camera.pitch(rightStickPosition.y * multiplier);
 			_camera.yaw(rightStickPosition.x * multiplier);
@@ -369,7 +628,7 @@ namespace IGCS
 	void System::waitForCameraStructAddresses()
 	{
 		OverlayConsole::instance().logLine("Waiting for camera struct interception...");
-		while(!GameSpecific::CameraManipulator::isCameraFound())
+		while (!GameSpecific::CameraManipulator::isCameraFound())
 		{
 			handleUserInput();
 			Sleep(100);
@@ -377,7 +636,7 @@ namespace IGCS
 		OverlayControl::addNotification("Camera found.");
 		GameSpecific::CameraManipulator::displayCameraStructAddress();
 	}
-		
+
 
 	void System::toggleCameraMovementLockState(bool newValue)
 	{
@@ -433,29 +692,29 @@ namespace IGCS
 		// calls won't return till the process has been completed. 
 		switch (static_cast<ScreenshotType>(settings.typeOfScreenshot))
 		{
-			case ScreenshotType::HorizontalPanorama:
-				{
-					// The total fov of the pano is always given in degrees. So we have to calculate that back to radians for usage with our camera.
-					float totalPanoAngleInDegrees = Utils::clamp(settings.totalPanoAngleDegrees, 30.0f, 360.0f, 110.0f);
-					float totalPanoAngleInRadians = (totalPanoAngleInDegrees / 180.0f) * DirectX::XM_PI;
-					float currentFoVInRadians = Utils::clamp(CameraManipulator::getCurrentFoV(), 0.01f, 3.1f, 1.34f);		// clamp it to max 180degrees. 
-					// if total fov is < than current fov, why bother with a pano?
-					if (currentFoVInRadians > 0.0f && currentFoVInRadians < totalPanoAngleInRadians)
-					{
-						// take the shots
-						Globals::instance().getScreenshotController().startHorizontalPanoramaShot(_camera, totalPanoAngleInRadians,
-																									Utils::clamp(settings.overlapPercentagePerPanoShot, 0.1f, 99.0f, 70.0f),
-																									currentFoVInRadians, isTestRun);
-					}
-					else
-					{
-						OverlayControl::addNotification("The total panorama angle is smaller than the current field of view, so just take a single screenshot instead.");
-					}
-				}
-				break;
-			case ScreenshotType::Lightfield:
-				Globals::instance().getScreenshotController().startLightfieldShot(_camera, settings.distanceBetweenLightfieldShots, settings.numberOfShotsToTake, isTestRun);
-				break;
+		case ScreenshotType::HorizontalPanorama:
+		{
+			// The total fov of the pano is always given in degrees. So we have to calculate that back to radians for usage with our camera.
+			float totalPanoAngleInDegrees = Utils::clamp(settings.totalPanoAngleDegrees, 30.0f, 360.0f, 110.0f);
+			float totalPanoAngleInRadians = (totalPanoAngleInDegrees / 180.0f) * DirectX::XM_PI;
+			float currentFoVInRadians = Utils::clamp(CameraManipulator::getCurrentFoV(), 0.01f, 3.1f, 1.34f);		// clamp it to max 180degrees. 
+			// if total fov is < than current fov, why bother with a pano?
+			if (currentFoVInRadians > 0.0f && currentFoVInRadians < totalPanoAngleInRadians)
+			{
+				// take the shots
+				Globals::instance().getScreenshotController().startHorizontalPanoramaShot(_camera, totalPanoAngleInRadians,
+					Utils::clamp(settings.overlapPercentagePerPanoShot, 0.1f, 99.0f, 70.0f),
+					currentFoVInRadians, isTestRun);
+			}
+			else
+			{
+				OverlayControl::addNotification("The total panorama angle is smaller than the current field of view, so just take a single screenshot instead.");
+			}
+		}
+		break;
+		case ScreenshotType::Lightfield:
+			Globals::instance().getScreenshotController().startLightfieldShot(_camera, settings.distanceBetweenLightfieldShots, settings.numberOfShotsToTake, isTestRun);
+			break;
 		}
 		// restore camera state
 		GameSpecific::CameraManipulator::restoreOriginalValuesAfterMultiShot();
@@ -466,5 +725,20 @@ namespace IGCS
 	{
 		// calls won't return till the process has been completed. 
 		Globals::instance().getScreenshotController().startSingleShot();
+	}
+
+
+	void System::takeBokehScreenshot()
+	{
+		// calls won't return till the process has been completed. 
+		if (!Globals::instance().checkBokehButton()) {
+			GameSpecific::CameraManipulator::cacheOriginalValuesBeforeMultiShot();
+			_firstFrame = true;
+			Globals::instance().checkBokehButton(true);
+		}
+		else {
+			Globals::instance().checkBokehButton(false);
+			GameSpecific::CameraManipulator::restoreOriginalValuesAfterMultiShot();
+		}
 	}
 }

@@ -29,9 +29,24 @@ namespace IGCS
 		float distanceBetweenLightfieldShots;
 		int numberOfShotsToTake;
 		int typeOfScreenshot;
+		int fileType;
 		float totalPanoAngleDegrees;
 		float overlapPercentagePerPanoShot;
 		char screenshotFolder[_MAX_PATH+1] = { 0 };
+		// bokeh settings
+		float focusingCorrection;
+		float focusingDistance;
+		int shapeSize;
+		float gammaCorrection;
+		float zPosCorrection;
+		float previewSize;
+		int numberOfRings;
+		float anamorphism;
+		bool offSetType;
+		float offSet;
+		bool onlyLastShot;
+		bool testMove;
+		bool upRight;
 
 		// settings not persisted to config file.
 		// add settings to edit here.
@@ -69,6 +84,18 @@ namespace IGCS
 			std::string folder = iniFile.GetValue("screenshotFolder", "ScreenshotSettings");
 			folder.copy(screenshotFolder, folder.length());
 			screenshotFolder[folder.length()] = '\0';
+			// bokeh settings
+			focusingCorrection = Utils::clamp(iniFile.GetFloat("focusingCorrection", "BokehSettings"), 1.0f, 10.0f);
+			focusingDistance = Utils::clamp(iniFile.GetFloat("focusingDistance", "BokehSettings"), 0.001f, 1.0f);
+			shapeSize = Utils::clamp(iniFile.GetInt("shapeSize", "BokehSettings"), 1, 100);
+			gammaCorrection = Utils::clamp(iniFile.GetFloat("gammaCorrection", "BokehSettings"), 1.0f, 3.0f);
+			zPosCorrection = Utils::clamp(iniFile.GetFloat("zPosCorrection", "BokehSettings"), 0.0f, 1.0f);
+			previewSize = Utils::clamp(iniFile.GetFloat("previewSize", "BokehSettings"), 1.0f, 3.0f);
+			numberOfRings = Utils::clamp(iniFile.GetInt("numberOfRings", "BokehSettings"), 1, 100);
+			anamorphism = Utils::clamp(iniFile.GetFloat("anamorphismSize", "BokehSettings"), -1.0f, 1.0f);
+			offSetType = iniFile.GetBool("offSetType", "BokehSettings");
+			offSet = Utils::clamp(iniFile.GetFloat("offSet", "BokehSettings"), 0.0f, 10.0f);
+			onlyLastShot = iniFile.GetBool("offSetType", "BokehSettings");
 
 			// load keybindings. They might not be there, or incomplete. 
 			for (std::pair<ActionType, ActionData*> kvp : keyBindingPerActionType)
@@ -105,6 +132,18 @@ namespace IGCS
 			iniFile.SetFloat("totalPanoAngleDegrees", totalPanoAngleDegrees, "", "ScreenshotSettings");
 			iniFile.SetFloat("overlapPercentagePerPanoShot", overlapPercentagePerPanoShot, "", "ScreenshotSettings");
 			iniFile.SetValue("screenshotFolder", screenshotFolder, "", "ScreenshotSettings");
+			// bokeh settings
+			iniFile.SetFloat("focusingCorrection", focusingCorrection, "", "BokehSettings");
+			iniFile.SetFloat("focusingDistance", focusingDistance, "", "BokehSettings");
+			iniFile.SetFloat("shapeSize", shapeSize, "", "BokehSettings");
+			iniFile.SetFloat("gammaCorrection", gammaCorrection, "", "BokehSettings");
+			iniFile.SetFloat("zPosCorrection", zPosCorrection, "", "BokehSettings");
+			iniFile.SetFloat("previewSize", previewSize, "", "BokehSettings");
+			iniFile.SetInt("numberOfRings", numberOfRings, "", "BokehSettings");
+			iniFile.SetFloat("anamorphism", anamorphism, "", "BokehSettings");
+			iniFile.SetBool("offSetType", offSetType, "", "BokehSettings");
+			iniFile.SetFloat("offSet", offSet, "", "BokehSettings");
+			iniFile.SetBool("onlyLastShot", onlyLastShot, "", "BokehSettings");
 
 			// save keybindings
 			if (!keyBindingPerActionType.empty())
@@ -140,9 +179,24 @@ namespace IGCS
 			distanceBetweenLightfieldShots = 1.0f;
 			numberOfShotsToTake= 45;
 			typeOfScreenshot = (int)ScreenshotType::Lightfield;
+			fileType = (int)ScreenshotFiletype::Bmp;
 			totalPanoAngleDegrees = 110.0f;
 			overlapPercentagePerPanoShot = 80.0f;
 			strcpy(screenshotFolder, "c:\\");
+			// bokeh settings
+			focusingCorrection = 1.0f;
+			focusingDistance = 1.0f;
+			shapeSize = 1;
+			gammaCorrection = 2.2f;
+			zPosCorrection = 0.0f;
+			previewSize = 1.5f;
+			numberOfRings = 12;
+			anamorphism = 0.0f;
+			offSetType = false;
+			offSet = 0.0;
+			onlyLastShot = true;
+			testMove = false;
+			upRight = false;
 
 			if (!persistedOnly)
 			{

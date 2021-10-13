@@ -43,9 +43,14 @@ namespace IGCS
 		void moveForward(float amount);
 		void moveRight(float amount);
 		void moveUp(float amount);
+		void moveForwardBokeh(double amount);
+		void moveRightBokeh(double amount);
+		void moveUpBokeh(double amount);
 		void yaw(float amount);
 		void pitch(float amount);
 		void roll(float amount);
+		void yawBokeh(double amount);
+		void pitchBokeh(double amount);
 		void setPitch(float angle);
 		void setYaw(float angle);
 		void setRoll(float angle);

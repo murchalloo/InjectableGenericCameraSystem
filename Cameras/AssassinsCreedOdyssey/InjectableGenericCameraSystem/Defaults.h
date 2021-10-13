@@ -65,6 +65,7 @@ namespace IGCS
 	#define IGCS_KEY_TEST_SHOT_SETUP				VK_END
 	#define IGCS_KEY_TAKE_SCREENSHOT				VK_PAUSE
 	#define IGCS_KEY_TAKE_MULTISHOT					VK_END			// With control
+	#define IGCS_KEY_TAKE_BOKEHSHOT					0x42			// With control
 
 	#define IGCS_BUTTON_FOV_DECREASE	Gamepad::button_t::UP
 	#define IGCS_BUTTON_FOV_INCREASE	Gamepad::button_t::DOWN
@@ -74,7 +75,7 @@ namespace IGCS
 	#define IGCS_BUTTON_FASTER			Gamepad::button_t::Y
 	#define IGCS_BUTTON_SLOWER			Gamepad::button_t::X
 
-	#define IGCS_JPG_SCREENSHOT_QUALITY				98
+	#define IGCS_JPG_SCREENSHOT_QUALITY				100
 
 	static const BYTE jmpFarInstructionBytes[6] = { 0xff, 0x25, 0, 0, 0, 0 };	// instruction bytes for jmp qword ptr [0000]
 
@@ -89,6 +90,7 @@ namespace IGCS
 
 		// Add more above
 		SingleShot,
+		BokehShot,
 		Amount,
 	};
 
@@ -97,6 +99,7 @@ namespace IGCS
 		Bmp,
 		Jpeg,
 		Png,
+		Hdr,
 
 		// Add more above
 		Amount,

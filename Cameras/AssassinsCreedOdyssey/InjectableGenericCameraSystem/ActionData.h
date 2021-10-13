@@ -56,6 +56,7 @@ namespace IGCS
 		TestMultiShotSetup,
 		TakeScreenshot,
 		TakeMultiShot,
+		TakeBokehShot,
 
 		// add new values above this line
 		Amount,

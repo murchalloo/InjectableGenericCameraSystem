@@ -28,6 +28,7 @@
 #include "stdafx.h"
 #include "Globals.h"
 #include "GameConstants.h"
+#include "OverlayControl.h"
 
 //--------------------------------------------------------------------------------------------------------------------------------
 // data shared with asm functions. This is allocated here, 'C' style and not in some datastructure as passing that to 
@@ -144,6 +145,7 @@ namespace IGCS
 		_keyBindingPerActionType[ActionType::TestMultiShotSetup] = new ActionData("TestMultiShotSetup", "Test multi-shot setup", IGCS_KEY_TEST_SHOT_SETUP, false, true, false);
 		_keyBindingPerActionType[ActionType::TakeScreenshot] = new ActionData("TakeScreenshot", "Take screenshot", IGCS_KEY_TAKE_SCREENSHOT, false, false, false);
 		_keyBindingPerActionType[ActionType::TakeMultiShot] = new ActionData("TakeMultiShot", "Take multi-screenshot", IGCS_KEY_TAKE_MULTISHOT, false, true, false);
+		_keyBindingPerActionType[ActionType::TakeBokehShot] = new ActionData("TakeBokehShot", "Take Bokeh-screenshot", IGCS_KEY_TAKE_BOKEHSHOT, false, true, false);
 
 		// Bindings which are often optional. Specify 'false' for available to disable it if the binding should be hidden. 
 		_keyBindingPerActionType[ActionType::HudToggle] = new ActionData("HudToggle", "Toggle HUD", IGCS_KEY_HUD_TOGGLE, false, false, false);

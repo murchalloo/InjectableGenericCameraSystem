@@ -111,6 +111,24 @@ namespace IGCS
 		_movementOccurred = true;
 	}
 
+	void Camera::moveForwardBokeh(double amount)
+	{
+		_direction.y += (amount);		
+		_movementOccurred = true;
+	}
+
+	void Camera::moveRightBokeh(double amount)
+	{
+		_direction.x += (amount);		
+		_movementOccurred = true;
+	}
+
+	void Camera::moveUpBokeh(double amount)
+	{
+		_direction.z += (amount);		
+		_movementOccurred = true;
+	}
+
 	void Camera::yaw(float amount)
 	{
 		_yaw += (Globals::instance().settings().rotationSpeed * amount);
@@ -132,6 +150,18 @@ namespace IGCS
 	{
 		_roll += (Globals::instance().settings().rotationSpeed * amount);
 		_roll = clampAngle(_roll);
+	}
+
+	void Camera::yawBokeh(double amount)
+	{
+		_yaw += (double)(amount);
+		_yaw = clampAngle(_yaw);
+	}
+
+	void Camera::pitchBokeh(double amount)
+	{
+		_pitch += (double)(amount);			// y is left, so inversed
+		_pitch = clampAngle(_pitch);
 	}
 
 	void Camera::setPitch(float angle)

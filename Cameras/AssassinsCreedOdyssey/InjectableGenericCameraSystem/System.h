@@ -46,6 +46,7 @@ namespace IGCS
 		void initialize();
 		void updateFrame();
 		void handleUserInput();
+		void handleBokehRendering();
 		void displayCameraState();
 		void toggleCameraMovementLockState(bool newValue);
 		void handleKeyboardCameraMovement(float multiplier);
@@ -57,7 +58,9 @@ namespace IGCS
 		void toggleHudRenderState();
 		void takeMultiShot(bool isTestRun);
 		void takeSingleScreenshot();
-
+		void takeBokehScreenshot();
+		
+		
 		Camera _camera;
 		LPBYTE _hostImageAddress;
 		DWORD _hostImageSize;
@@ -67,6 +70,35 @@ namespace IGCS
 		bool _hudToggled = false;
 		map<string, AOBBlock*> _aobBlocks;
 		bool _applyHammerPrevention = false;	// set to true by a keyboard action and which triggers a sleep before keyboard handling is performed.
+
+		/// //////////////////////////////////////
+		double _x = 0.0;
+		double _y = 0.0;
+		double _z = 0.0;
+		bool _firstFrame = false;
+		bool _bokehRendering = false;
+
+		// bokeh settings
+		double _radius = 0.001f;
+		float _ringIndex = 1.0f;
+		float _pointNumber = 1.0f;
+		float _actualOffSet = 0.0f;
+		float _roundness = 1.0f;
+		double _amount;
+		int _pointsFirstRing = 8;
+		int _pointsOnRing = 0;
+		double _currentRingRadiusCoords = 0;
+		double _ringRadiusDeltaCoords = 0;
+		double _anamorphX = 1.0f;
+		double _anamorphY = 1.0f;
+		double _angle;
+		double _anglePerPoint;
+		float _shotCounter = 0.0f;
+		double _angleX = 0.0;
+		double _angleY = 0.0;
+		double _dot = 0.0f;
+		double _focus = 0.0f;
+		
 	};
 }
 

@@ -122,7 +122,12 @@ namespace IGCS::D3D11Hooker
 		// if we have to grab the frame, do it now.
 		if (grabFrame)
 		{
-			screenshotController.storeGrabbedShot(capture_frame(pSwapChain));
+			if (screenshotController.isBokehShot()) {
+				screenshotController.storeBokehGrabbedShot(capture_frame(pSwapChain));
+			}
+			else {
+				screenshotController.storeGrabbedShot(capture_frame(pSwapChain));
+			}
 		}
 		screenshotController.presentCalled();
 		_presentInProgress = false;

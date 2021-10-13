@@ -54,16 +54,20 @@ namespace IGCS
 		void startSingleShot();
 		void startHorizontalPanoramaShot(Camera camera, float totalFoVInDegrees, float overlapPercentagePerPanoShot, float currentFoVInDegrees, bool isTestRun);
 		void startLightfieldShot(Camera camera, float distancePerStep, int amountOfShots, bool isTestRun);
+		void startBokehShot(bool lastShotTaken);
 		void storeGrabbedShot(std::vector<uint8_t>);
+		void storeBokehGrabbedShot(std::vector<uint8_t>);
 		void setBufferSize(int width, int height);
 		ScreenshotControllerState getState() { return _state; }
 		void reset();
 		bool shouldTakeShot();		// returns true if a shot should be taken, false otherwise. 
+		bool isBokehShot();
 		void presentCalled();
 
 	private:
 		void waitForShots();
 		void saveGrabbedShots();
+		void saveBokehGrabbedShots();
 		void saveShotToFile(std::string destinationFolder, std::vector<uint8_t> data, int frameNumber);
 		std::string createScreenshotFolder();
 		void moveCameraForLightfield(int direction, bool end);
@@ -87,12 +91,14 @@ namespace IGCS
 		int _framebufferHeight = 0;
 		ScreenshotType _typeOfShot = ScreenshotType::Lightfield;
 		ScreenshotControllerState _state = ScreenshotControllerState::Off;
-		ScreenshotFiletype _filetype = ScreenshotFiletype::Jpeg;
+		ScreenshotFiletype _filetype = ScreenshotFiletype::Bmp;
 		Camera _camera;				// use local copy of the camera, passed in by the start*shot methods, passed by value. This frees us from caching the old state when manipulating the camera.
 		bool _isTestRun = false;
 
 		std::string _rootFolder;
 		std::vector<std::vector<uint8_t>> _grabbedFrames;
+		std::vector<uint8_t> _finalFrame;
+		std::vector<float> _floatRangeFrame;
 
 		// Used together to make sure the main thread in System doesn't busy-wait and waits till the grabbing process has been completed.
 		std::mutex _waitCompletionMutex;
