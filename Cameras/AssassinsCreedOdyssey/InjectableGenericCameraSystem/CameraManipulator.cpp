@@ -49,6 +49,8 @@ namespace IGCS::GameSpecific::CameraManipulator
 {
 	static GameCameraData _originalData;
 	static GameCameraData _preMultiShotData;
+	static GameCameraData _cachedData;
+	static DirectX::XMFLOAT3 cachedCoords;
 
 	static LPBYTE g_resolutionScaleMenuValueAddress = nullptr;
 
@@ -74,6 +76,25 @@ namespace IGCS::GameSpecific::CameraManipulator
 		if (isCameraFound())
 		{
 			currentCoords = getCurrentCameraCoords();
+			newCoords = camera.calculateNewCoords(currentCoords, newLookQuaternion);
+			writeNewCameraValuesToGameData(newCoords, newLookQuaternion);
+		}
+	}
+
+	void updateCameraDataInGameDataForBokeh(Camera& camera) // same function but used cached quaternion and cached camera coords
+	{
+		if (!g_cameraEnabled)
+		{
+			return;
+		}
+
+		// calculate new camera values. We have two cameras, but they might not be available both, so we have to test before we do anything. 
+		DirectX::XMVECTOR newLookQuaternion = camera.calculateLookQuaternion(XMVectorSet(_cachedData._quaternion[0], _cachedData._quaternion[1], _cachedData._quaternion[2], _cachedData._quaternion[3])); //camera.calculateLookQuaternion();
+		DirectX::XMFLOAT3 currentCoords;
+		DirectX::XMFLOAT3 newCoords;
+		if (isCameraFound())
+		{
+			currentCoords = getCachedCameraCoords();
 			newCoords = camera.calculateNewCoords(currentCoords, newLookQuaternion);
 			writeNewCameraValuesToGameData(newCoords, newLookQuaternion);
 		}
@@ -305,6 +326,12 @@ namespace IGCS::GameSpecific::CameraManipulator
 		return currentCoords;
 	}
 
+	XMFLOAT3 getCachedCameraCoords() // use cached coords in updateCameraData calculation
+	{
+		//XMFLOAT3 currentCoords = cachedCoords;
+		//return currentCoords;
+		return XMFLOAT3(_cachedData._coords[0], _cachedData._coords[1], _cachedData._coords[2]);
+	}
 
 	// newLookQuaternion: newly calculated quaternion of camera view space. Can be used to construct a 4x4 matrix if the game uses a matrix instead of a quaternion
 	// newCoords are the new coordinates for the camera in worldspace.
@@ -332,6 +359,22 @@ namespace IGCS::GameSpecific::CameraManipulator
 		quaternionInMemory[1] = qAsFloat4.y;
 		quaternionInMemory[2] = qAsFloat4.z;
 		quaternionInMemory[3] = qAsFloat4.w;
+	}
+
+	void writeNewCameraValuesToGameDataForBokeh(XMFLOAT3 newCoords) // write only camera coords
+	{
+		if (!isCameraFound())
+		{
+			return;
+		}
+
+		float* coordsInMemory = nullptr;
+
+		// only the gameplay camera. Photomode coords aren't updated.
+		coordsInMemory = reinterpret_cast<float*>(g_cameraStructAddress + COORDS_IN_STRUCT_OFFSET);
+		coordsInMemory[0] = newCoords.x;
+		coordsInMemory[1] = newCoords.y;
+		coordsInMemory[2] = newCoords.z;
 	}
 
 
@@ -396,7 +439,21 @@ namespace IGCS::GameSpecific::CameraManipulator
 	void cacheOriginalValuesBeforeMultiShot()
 	{
 		cacheGameCameraDataInCache(_preMultiShotData);
+		float* coordsInMemory = reinterpret_cast<float*>(g_cameraStructAddress + COORDS_IN_STRUCT_OFFSET);
+		cachedCoords = XMFLOAT3(coordsInMemory[0], coordsInMemory[1], coordsInMemory[2]);
 	}
 
+	void restoreOriginalValuesAfterCameraBokeh(Camera& camera) // restore camera data after rendering is done
+	{
+		camera.restoreAngles();
+		restoreGameCameraDataWithCachedData(_cachedData);
+	}
+
+
+	void cacheOriginalValuesBeforeCameraBokeh(Camera& camera)  // cache camera data to calculate movement from it for each frame
+	{
+		camera.cacheAngles();
+		cacheGameCameraDataInCache(_cachedData);
+	}
 
 }

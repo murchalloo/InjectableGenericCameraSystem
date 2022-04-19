@@ -66,6 +66,7 @@ namespace IGCS
 		_hostImageSize = hostImageSize;
 		Globals::instance().gamePad().setInvertLStickY(CONTROLLER_Y_INVERT);
 		Globals::instance().gamePad().setInvertRStickY(CONTROLLER_Y_INVERT);
+		_camera = Globals::instance().getCameraObject();
 		initialize();		// will block till camera is found
 		mainLoop();
 	}
@@ -76,8 +77,11 @@ namespace IGCS
 	{
 		while (Globals::instance().systemActive())
 		{
-			Sleep(FRAME_SLEEP);
-			updateFrame();
+			if (g_blockCameraMovementBool == 0) // stop updateFrame if rendering is started
+			{
+				Sleep(FRAME_SLEEP);
+				updateFrame();
+			}
 		}
 	}
 
@@ -214,7 +218,7 @@ namespace IGCS
 
 	void System::handleGamePadMovement(float multiplierBase)
 	{
-		if(!Globals::instance().controllerControlsCamera())
+		if (!Globals::instance().controllerControlsCamera())
 		{
 			return;
 		}
@@ -224,8 +228,8 @@ namespace IGCS
 		if (gamePad.isConnected())
 		{
 			Settings& settings = Globals::instance().settings();
-			float  multiplier = gamePad.isButtonPressed(IGCS_BUTTON_FASTER) ? settings.fastMovementMultiplier 
-																			: gamePad.isButtonPressed(IGCS_BUTTON_SLOWER) ? settings.slowMovementMultiplier : multiplierBase;
+			float  multiplier = gamePad.isButtonPressed(IGCS_BUTTON_FASTER) ? settings.fastMovementMultiplier
+				: gamePad.isButtonPressed(IGCS_BUTTON_SLOWER) ? settings.slowMovementMultiplier : multiplierBase;
 			vec2 rightStickPosition = gamePad.getRStickPosition();
 			_camera.pitch(rightStickPosition.y * multiplier);
 			_camera.yaw(rightStickPosition.x * multiplier);
@@ -369,7 +373,7 @@ namespace IGCS
 	void System::waitForCameraStructAddresses()
 	{
 		OverlayConsole::instance().logLine("Waiting for camera struct interception...");
-		while(!GameSpecific::CameraManipulator::isCameraFound())
+		while (!GameSpecific::CameraManipulator::isCameraFound())
 		{
 			handleUserInput();
 			Sleep(100);
@@ -377,7 +381,7 @@ namespace IGCS
 		OverlayControl::addNotification("Camera found.");
 		GameSpecific::CameraManipulator::displayCameraStructAddress();
 	}
-		
+
 
 	void System::toggleCameraMovementLockState(bool newValue)
 	{
@@ -433,29 +437,29 @@ namespace IGCS
 		// calls won't return till the process has been completed. 
 		switch (static_cast<ScreenshotType>(settings.typeOfScreenshot))
 		{
-			case ScreenshotType::HorizontalPanorama:
-				{
-					// The total fov of the pano is always given in degrees. So we have to calculate that back to radians for usage with our camera.
-					float totalPanoAngleInDegrees = Utils::clamp(settings.totalPanoAngleDegrees, 30.0f, 360.0f, 110.0f);
-					float totalPanoAngleInRadians = (totalPanoAngleInDegrees / 180.0f) * DirectX::XM_PI;
-					float currentFoVInRadians = Utils::clamp(CameraManipulator::getCurrentFoV(), 0.01f, 3.1f, 1.34f);		// clamp it to max 180degrees. 
-					// if total fov is < than current fov, why bother with a pano?
-					if (currentFoVInRadians > 0.0f && currentFoVInRadians < totalPanoAngleInRadians)
-					{
-						// take the shots
-						Globals::instance().getScreenshotController().startHorizontalPanoramaShot(_camera, totalPanoAngleInRadians,
-																									Utils::clamp(settings.overlapPercentagePerPanoShot, 0.1f, 99.0f, 70.0f),
-																									currentFoVInRadians, isTestRun);
-					}
-					else
-					{
-						OverlayControl::addNotification("The total panorama angle is smaller than the current field of view, so just take a single screenshot instead.");
-					}
-				}
-				break;
-			case ScreenshotType::Lightfield:
-				Globals::instance().getScreenshotController().startLightfieldShot(_camera, settings.distanceBetweenLightfieldShots, settings.numberOfShotsToTake, isTestRun);
-				break;
+		case ScreenshotType::HorizontalPanorama:
+		{
+			// The total fov of the pano is always given in degrees. So we have to calculate that back to radians for usage with our camera.
+			float totalPanoAngleInDegrees = Utils::clamp(settings.totalPanoAngleDegrees, 30.0f, 360.0f, 110.0f);
+			float totalPanoAngleInRadians = (totalPanoAngleInDegrees / 180.0f) * DirectX::XM_PI;
+			float currentFoVInRadians = Utils::clamp(CameraManipulator::getCurrentFoV(), 0.01f, 3.1f, 1.34f);		// clamp it to max 180degrees. 
+			// if total fov is < than current fov, why bother with a pano?
+			if (currentFoVInRadians > 0.0f && currentFoVInRadians < totalPanoAngleInRadians)
+			{
+				// take the shots
+				Globals::instance().getScreenshotController().startHorizontalPanoramaShot(_camera, totalPanoAngleInRadians,
+					Utils::clamp(settings.overlapPercentagePerPanoShot, 0.1f, 99.0f, 70.0f),
+					currentFoVInRadians, isTestRun);
+			}
+			else
+			{
+				OverlayControl::addNotification("The total panorama angle is smaller than the current field of view, so just take a single screenshot instead.");
+			}
+		}
+		break;
+		case ScreenshotType::Lightfield:
+			Globals::instance().getScreenshotController().startLightfieldShot(_camera, settings.distanceBetweenLightfieldShots, settings.numberOfShotsToTake, isTestRun);
+			break;
 		}
 		// restore camera state
 		GameSpecific::CameraManipulator::restoreOriginalValuesAfterMultiShot();

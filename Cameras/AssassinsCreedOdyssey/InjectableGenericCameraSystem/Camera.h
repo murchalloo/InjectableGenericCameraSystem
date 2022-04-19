@@ -38,11 +38,15 @@ namespace IGCS
 
 		DirectX::XMVECTOR calculateLookQuaternion();
 		DirectX::XMFLOAT3 calculateNewCoords(const DirectX::XMFLOAT3 currentCoords, const DirectX::XMVECTOR lookQ);
+		DirectX::XMVECTOR calculateLookQuaternion(DirectX::XMVECTOR originalRotationQuaternion);
 		void resetMovement();
 		void resetAngles();
 		void moveForward(float amount);
 		void moveRight(float amount);
 		void moveUp(float amount);
+		void moveForwardClear(float amount);
+		void moveRightClear(float amount);
+		void moveUpClear(float amount);
 		void yaw(float amount);
 		void pitch(float amount);
 		void roll(float amount);
@@ -54,11 +58,15 @@ namespace IGCS
 		float getRoll() { return _roll; }
 		float lookDirectionInverter() { return _lookDirectionInverter; }
 		void toggleLookDirectionInverter() { _lookDirectionInverter = -_lookDirectionInverter; }
+		DirectX::XMFLOAT3 getCachedAngles() { return _cachedAngles; } // this is probably the old implementation for using angles in movement calculation
+		void cacheAngles() { _cachedAngles = DirectX::XMFLOAT3(_pitch, _roll, _yaw); }
+		void restoreAngles() { _pitch = _cachedAngles.x; _roll = _cachedAngles.y; _yaw = _cachedAngles.z; }
 
 	private:
 		float clampAngle(float angle) const;
 
 		DirectX::XMFLOAT3 _direction;
+		DirectX::XMFLOAT3 _cachedAngles;
 		float _yaw;
 		float _pitch;
 		float _roll;

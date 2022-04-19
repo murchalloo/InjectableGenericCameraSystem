@@ -40,6 +40,7 @@ namespace IGCS
 		System();
 		~System();
 		void start(LPBYTE hostBaseAddress, DWORD hostImageSize);
+		
 
 	private:
 		void mainLoop();

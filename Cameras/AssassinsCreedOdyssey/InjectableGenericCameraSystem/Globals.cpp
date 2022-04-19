@@ -28,12 +28,55 @@
 #include "stdafx.h"
 #include "Globals.h"
 #include "GameConstants.h"
+#include "Camera.h"
+#include "CameraManipulator.h"
 
 //--------------------------------------------------------------------------------------------------------------------------------
 // data shared with asm functions. This is allocated here, 'C' style and not in some datastructure as passing that to 
 // MASM is rather tedious. 
 extern "C" {
 	BYTE g_cameraEnabled = 0;
+	BYTE g_blockCameraMovementBool = 0; 
+}
+
+bool isCameraEnabled() // get camera enabled status
+{
+	if (g_cameraEnabled == 0x00)
+	{
+		return false;
+	}
+	else if (g_cameraEnabled == 0x01)
+	{
+		return true;
+	}
+}
+
+void blockCameraMovementGlobal(bool blockCameraMov) // func to block camera interaction in System.cpp and cache camera data
+{
+	g_blockCameraMovementBool = blockCameraMov ? 1 : 0;
+	IGCS::Camera cameraObject = IGCS::Globals::instance().getCameraObject();
+	if (g_blockCameraMovementBool) {
+		IGCS::GameSpecific::CameraManipulator::cacheOriginalValuesBeforeCameraBokeh(cameraObject);
+	}
+	else {
+		IGCS::GameSpecific::CameraManipulator::restoreOriginalValuesAfterCameraBokeh(cameraObject);
+	}
+}
+
+float getCurrentFOVValue() // get current for to calculate screen ofsset
+{
+	float CurrentFOV = IGCS::GameSpecific::CameraManipulator::getCurrentFoV();
+	return CurrentFOV;
+}
+
+void moveCameraToPos(float forward, float right, float up) // write all movement needed to camera at once
+{
+	IGCS::Camera cameraObject = IGCS::Globals::instance().getCameraObject();
+	cameraObject.resetMovement();
+	cameraObject.moveForwardClear(forward);
+	cameraObject.moveRightClear(right);
+	cameraObject.moveUpClear(up);
+	IGCS::GameSpecific::CameraManipulator::updateCameraDataInGameDataForBokeh(cameraObject);
 }
 
 
@@ -53,7 +96,7 @@ namespace IGCS
 	}
 
 
-	Globals &Globals::instance()
+	Globals& Globals::instance()
 	{
 		static Globals theInstance;
 		return theInstance;
@@ -117,7 +160,7 @@ namespace IGCS
 		}
 		return _keyBindingPerActionType.at(type);
 	}
-	
+
 
 	void Globals::initializeKeyBindings()
 	{

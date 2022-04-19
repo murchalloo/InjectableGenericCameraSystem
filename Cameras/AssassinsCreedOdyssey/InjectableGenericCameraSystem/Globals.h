@@ -27,6 +27,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include "stdafx.h"
+#include "Camera.h"
 #include "Gamepad.h"
 #include "GameConstants.h"
 #include "Defaults.h"
@@ -40,6 +41,16 @@
 
 extern "C" BYTE g_cameraEnabled;
 extern "C" BYTE g_gamePaused;
+
+extern "C" BYTE g_blockCameraMovementBool;
+
+// exported functions
+
+extern "C" __declspec(dllexport) bool isCameraEnabled();
+extern "C" __declspec(dllexport) void blockCameraMovementGlobal(bool value);
+extern "C" __declspec(dllexport) float getCurrentFOVValue();
+extern "C" __declspec(dllexport) void moveCameraToPos(float forward, float right, float up);
+
 
 namespace IGCS
 {
@@ -69,10 +80,12 @@ namespace IGCS
 		ActionData& getKeyCollector() { return _keyCollectorData; }
 		ScreenshotController& getScreenshotController() { return _screenshotController; }
 		void reinitializeScreenshotController();
+		Camera getCameraObject() const { return _camera; } // get camera object for CameraManipulator
 
 	private:
 		void initializeKeyBindings();
 
+		Camera _camera;
 		bool _inputBlocked = false;
 		atomic_bool _systemActive = false;
 		Gamepad _gamePad;

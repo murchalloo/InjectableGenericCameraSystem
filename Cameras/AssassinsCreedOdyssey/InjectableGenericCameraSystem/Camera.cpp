@@ -57,6 +57,35 @@ namespace IGCS
 		return qToReturn;
 	}
 
+	XMVECTOR Camera::calculateLookQuaternion(XMVECTOR originalRotationQuaternion) // duplicated calculateLookQuaternion function to use in moveCameraToPos function (somehow it was resetting camera rotation after render was started, so i grab original camera rotation)
+	{
+		float x = DirectX::XMVectorGetX(originalRotationQuaternion);
+		float y = DirectX::XMVectorGetY(originalRotationQuaternion);
+		float z = DirectX::XMVectorGetZ(originalRotationQuaternion);
+		float w = DirectX::XMVectorGetW(originalRotationQuaternion);
+		float forward_x = 2 * (x * z + w * y);
+		float forward_y = 2 * (y * z - w * x);
+		float forward_z = 1 - 2 * (x * x + y * y);
+		float up_x = 2 * (x * y - w * z);
+		float up_y = 1 - 2 * (x * x + z * z);
+		float up_z = 2 * (y * z + w * x);
+		float left_x = 1 - 2 * (y * y + z * z);
+		float left_y = 2 * (x * y + w * z);
+		float left_z = 2 * (x * z - w * y);
+
+		XMVECTOR xQ = XMQuaternionRotationNormal(XMVectorSet(left_x, left_y, left_z, 1.0f), -_pitch);
+		XMVECTOR yQ = XMQuaternionRotationNormal(XMVectorSet(up_x, up_y, up_z, 1.0f), _roll);
+		XMVECTOR zQ = XMQuaternionRotationNormal(XMVectorSet(forward_x, forward_y, forward_z, 1.0f), -_yaw);
+		XMVECTOR tmpQ = XMQuaternionMultiply(xQ, zQ);
+		XMVECTOR qToReturn = XMQuaternionMultiply(yQ, tmpQ);
+		XMQuaternionNormalize(qToReturn);
+
+		qToReturn = XMQuaternionMultiply(originalRotationQuaternion, qToReturn);
+		XMQuaternionNormalize(qToReturn);
+		resetAngles();
+		return qToReturn;
+	}
+
 
 	void Camera::resetMovement()
 	{
@@ -108,6 +137,24 @@ namespace IGCS
 	void Camera::moveUp(float amount)
 	{
 		_direction.z += (Globals::instance().settings().movementSpeed * amount * Globals::instance().settings().movementUpMultiplier);		// z is up
+		_movementOccurred = true;
+	}
+
+	void Camera::moveForwardClear(float amount) // clear movement with no modifications
+	{
+		_direction.y += (amount);		// y out of the screen, z up
+		_movementOccurred = true;
+	}
+
+	void Camera::moveRightClear(float amount) // clear movement with no modifications
+	{
+		_direction.x += (amount);		// x is right
+		_movementOccurred = true;
+	}
+
+	void Camera::moveUpClear(float amount) // clear movement with no modifications
+	{
+		_direction.z += (amount);		// z is up
 		_movementOccurred = true;
 	}
 

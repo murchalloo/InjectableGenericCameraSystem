@@ -32,13 +32,18 @@
 namespace IGCS::GameSpecific::CameraManipulator
 {
 	void updateCameraDataInGameData(Camera& camera);
+	void updateCameraDataInGameDataForBokeh(Camera& camera);
 	void writeNewCameraValuesToGameData(DirectX::XMFLOAT3 newCoords, DirectX::XMVECTOR newLookQuaternion);
+	void writeNewCameraValuesToGameDataForBokeh(DirectX::XMFLOAT3 newCoords);
 	void restoreOriginalValuesAfterCameraDisable();
 	void restoreOriginalValuesAfterMultiShot();
 	void cacheOriginalValuesBeforeCameraEnable();
 	void cacheOriginalValuesBeforeMultiShot();
+	void restoreOriginalValuesAfterCameraBokeh(Camera& camera);
+	void cacheOriginalValuesBeforeCameraBokeh(Camera& camera);
 	bool setTimeStopValue(BYTE newValue);
 	DirectX::XMFLOAT3 getCurrentCameraCoords();
+	DirectX::XMFLOAT3 getCachedCameraCoords();
 	void resetFoV();
 	void changeFoV(float amount);
 	float getCurrentFoV();
